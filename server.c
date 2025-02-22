@@ -14,6 +14,8 @@
 #define MAX_CLIENTS 10
 #define SHUTDOWN_MSG "SHUTDOWN"
 #define LIST_CMD "LIST"
+#define HIDE_CMD "HIDE"
+#define UNHIDE_CMD "UNHIDE"
 
 typedef struct {
     pid_t client_pid;
@@ -22,6 +24,8 @@ typedef struct {
 
 pthread_mutex_t client_list_mutex = PTHREAD_MUTEX_INITIALIZER;
 pid_t client_pids[MAX_CLIENTS];
+int client_hidden[MAX_CLIENTS] = {0}; // Initially, all clients are visible
+
 int client_count = 0;
 
 void *handle_client_request(void *arg) {
@@ -45,11 +49,46 @@ void *handle_client_request(void *arg) {
     if (strcmp(request.command, LIST_CMD) == 0) {
         // Handle "LIST" command to send all connected client PIDs
         pthread_mutex_lock(&client_list_mutex);
+        int visible_clients = 0; // Counter for visible clients
         snprintf(output, MAX_SIZE, "[Server] Connected Clients:\n");
         for (int i = 0; i < client_count; i++) {
-            char client_info[50];
-            snprintf(client_info, 50, "Client PID: %d\n", client_pids[i]);
-            strncat(output, client_info, MAX_SIZE - strlen(output) - 1);
+            if (!client_hidden[i]) { // Check if the client is not hidden
+                char client_info[50];
+                snprintf(client_info, 50, "Client PID: %d\n", client_pids[i]);
+                strncat(output, client_info, MAX_SIZE - strlen(output) - 1);
+                visible_clients++;
+            }
+        }
+        if (visible_clients == 0) { // If no visible clients
+            snprintf(output, MAX_SIZE, "[Server] All Clients Are Hidden...\n");
+        }
+        pthread_mutex_unlock(&client_list_mutex);
+    } else if (strcmp(request.command, HIDE_CMD) == 0) {
+        pthread_mutex_lock(&client_list_mutex);
+        for (int i = 0; i < client_count; i++) {
+            if (client_pids[i] == request.client_pid) {
+                if (client_hidden[i] == 1) {
+                    snprintf(output, MAX_SIZE, "[Server] You Are Already Hidden...\n");
+                } else {
+                    client_hidden[i] = 1;
+                    snprintf(output, MAX_SIZE, "[Server] You Are Now Hidden...\n");
+                }
+                break;
+            }
+        }
+        pthread_mutex_unlock(&client_list_mutex);
+    } else if (strcmp(request.command, UNHIDE_CMD) == 0) {
+        pthread_mutex_lock(&client_list_mutex);
+        for (int i = 0; i < client_count; i++) {
+            if (client_pids[i] == request.client_pid) {
+                if (client_hidden[i] == 0) {
+                    snprintf(output, MAX_SIZE, "[Server] You Are Not Hidden At All...\n");
+                } else {
+                    client_hidden[i] = 0;
+                    snprintf(output, MAX_SIZE, "[Server] You Are Now Visible Again...\n");
+                }
+                break;
+            }
         }
         pthread_mutex_unlock(&client_list_mutex);
     } else {
@@ -108,7 +147,9 @@ int main() {
                 }
             }
             if (!known_client && client_count < MAX_CLIENTS) {
-                client_pids[client_count++] = request->client_pid;
+                client_pids[client_count] = request->client_pid;
+                client_hidden[client_count] = 0; // Initialize as visible
+                client_count++;
             }
             pthread_mutex_unlock(&client_list_mutex);
 

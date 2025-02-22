@@ -12,6 +12,9 @@
 #define RESPONSE_QUEUE_PREFIX "/client_queue_"
 #define MAX_SIZE 1024
 #define SHUTDOWN_MSG "SHUTDOWN"
+#define LIST_CMD "LIST"
+#define HIDE_CMD "HIDE"
+#define UNHIDE_CMD "UNHIDE"
 
 typedef struct {
     pid_t client_pid;
@@ -61,11 +64,20 @@ int main() {
     pthread_create(&shutdown_listener, NULL, listen_for_shutdown, NULL);
     pthread_detach(shutdown_listener);
 
-    printf("[Client] Connected. Enter shell commands or type 'LIST'.\n");
+    printf("|-------------------------------------------------------------------------------------------|\n");
+    printf("|----------------------- THIS IS INSTRUCTOR'S REFERENCE SHELL CLIENT -----------------------|\n");
+    printf("|################## I am the Parent Process (PID: %d) running this Client #################|\n", getpid());
+    printf("|-------------------------------------------------------------------------------------------|\n");
+    
+    printf("[Main Thread -- %lu]: I am the a Client's Main Thread. My Parent Process is (PID: %d)...\n\n", pthread_self(), getpid()); 
+
+    printf("[Main Thread -- %lu]: Created a Child Thread [%lu] for listening to the server's SHUTDOWN broadcast message...\n\n", pthread_self(), shutdown_listener);
+
+    printf("[Main Thread -- %lu]: Client initialized. Enter commands (type 'EXIT' to quit)...\n", pthread_self());
 
     char command[MAX_SIZE];
     while (1) {
-        printf("Enter command: ");
+        printf("> Enter command: ");
         fgets(command, MAX_SIZE, stdin);
         command[strcspn(command, "\n")] = 0;
 
@@ -83,7 +95,9 @@ int main() {
         } else {
             char output[MAX_SIZE];
             if (mq_receive(response_mq, output, MAX_SIZE, NULL) > 0) {
-                printf("[Client] Response:\n%s\n", output);
+                printf("[Main Thread -- %lu]: Received server response\n", pthread_self());
+                printf("=====================================================================\n");
+                printf("%s\n", output);
             } else {
                 perror("[Client] Failed to receive response");
             }
